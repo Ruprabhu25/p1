@@ -12,9 +12,6 @@ struct node {
 struct node *head_arg = NULL;
 struct node *current_arg = NULL;
 
-struct node *head_path = NULL;
-struct node *current_path = NULL;
-
 void add_node(char* str_value, struct node **head, struct node **current) {
 	// create new node with value of pattern
 	struct node *newNode = malloc(sizeof(struct node));
@@ -31,10 +28,16 @@ void add_node(char* str_value, struct node **head, struct node **current) {
 	{
 		//add the newNode at the end of the linked list
 		(*current)->next = newNode;
-		current = &((*current)->next);
+		*current = (*current)->next;
 	}
 }
-
+void print_arr(char* args[], int size) {
+        printf("array of args: ");
+        for (int i = 0; i<size; i++) {
+                printf("%s ", args[i]);
+        }
+        printf("\n");
+}
 int main(void)
 {
         char cmd[CMDLINE_MAX];
@@ -49,6 +52,7 @@ int main(void)
         while (1) {
                 char *nl;
                 //int retval;
+                int num_args = 0;
 
                 /* Print prompt */
                 printf("sshell$ ");
@@ -78,31 +82,42 @@ int main(void)
                 char* token_args = strtok(cmd, " ");
                 // loop through the string to extract all other tokens
                 while( token_args != NULL ) {
+                        //printf( "token: %s\n", token_args ); //printing each token
                         add_node(token_args, &head_arg, &current_arg);
-                        //printf( " %s\n", token_args ); //printing each token
-                        token_args = strtok(NULL, " ");
+                        num_args++;
+                        token_args = strtok(NULL, " "); 
+                        //printf("current node: %s\n", current_arg->val);                        token_args = strtok(NULL, " ");
                 }
-                printf("command: %s\n", cmd);
-                char* path = getenv("PATH");
-                char* token_path = strtok(path, ":");
+                //printf("current1: %s\n", current_arg->val);
+                char* args[num_args+1];
+                int arg_pos = 0;
+                //printf("args:\n");
+                //printf("current2: %s\n", current_arg->val);
+                while (head_arg != NULL) {
+                        //printf("%d %s\n", arg_pos, head_arg->val);
+                        //printf("current: %s\n", current_arg->val);
+                        args[arg_pos] = head_arg -> val;
+                        head_arg = head_arg->next;
+                        arg_pos++;
+                }
+                args[arg_pos] = NULL;
+                //printf("%d\n", num_args);
+                //print_arr(args, num_args);
+                //printf("%d\n", arg_pos);
+                //printf("command: %s\n", cmd);
+                //char* path = getenv("PATH");
+                //char* token_path = strtok(path, ":");
                 // loop through the string to extract all other tokens
-                while( token_path != NULL ) {
-                        //printf("token_path: %s\n", token_path);
-                        char pathCmd[4096];
-                        snprintf(pathCmd, 4096,"%s%s%s", token_path, "/", cmd);
-                        //printf("pathCmd: %s\n", pathCmd);
-                        char* args[] = {pathCmd, "hello", NULL};
-                        pid = fork();
-                        if (pid == 0) {
-                                execvp(pathCmd, args);
-                                //perror("execvp");
-                                exit(1);
-                        } else if (pid > 0) {
-                                waitpid(pid, &status, 0);
-                        }
-                        token_path = strtok(NULL, ":");
+                pid = fork();
+                if (pid == 0) {
+                        execvp(args[0], args);
+                        //perror("execvp");
+                        exit(0);
+                } else if (pid > 0) {
+                        waitpid(pid, &status, 0);
                 }
-                exit(0);
+                head_arg = NULL;
+                //}
                 //retval = system(cmd);
                 fprintf(stdout, "Return status value for '%s': %d\n",
                         cmd, status);
