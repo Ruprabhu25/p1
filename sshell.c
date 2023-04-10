@@ -79,7 +79,7 @@ int main(void)
                 // loop through the string to extract all other tokens
                 while( token_args != NULL ) {
                         add_node(token_args, &head_arg, &current_arg);
-                        printf( " %s\n", token_args ); //printing each token
+                        //printf( " %s\n", token_args ); //printing each token
                         token_args = strtok(NULL, " ");
                 }
                 printf("command: %s\n", cmd);
@@ -87,29 +87,22 @@ int main(void)
                 char* token_path = strtok(path, ":");
                 // loop through the string to extract all other tokens
                 while( token_path != NULL ) {
-                        //add_node(token_path, &head_path, &current_path);
-                        //printf( " %s\n", token_path ); //printing each token
-                        printf("token_path: %s\n", token_path);
+                        //printf("token_path: %s\n", token_path);
                         char pathCmd[4096];
                         snprintf(pathCmd, 4096,"%s%s%s", token_path, "/", cmd);
-                        //char* cmd_str = strcat(token_path, "/");
-                        //cmd_str =  strcat(cmd_str, head_arg->val);
-                        printf("pathCmd: %s\n", pathCmd);
+                        //printf("pathCmd: %s\n", pathCmd);
+                        char* args[] = {pathCmd, "hello", NULL};
+                        pid = fork();
+                        if (pid == 0) {
+                                execvp(pathCmd, args);
+                                //perror("execvp");
+                                exit(1);
+                        } else if (pid > 0) {
+                                waitpid(pid, &status, 0);
+                        }
                         token_path = strtok(NULL, ":");
                 }
-                //char* path_cmd = strcat(path, cmd);
-                //printf("%s\n", path_cmd);
-                pid = fork();
-                if (pid == 0) {
-                        /*total_command = cat(path /cmd
-                        args = {total_command, }
-                        execvp(cmd, args);
-                        execvp(cat(cmd), {cmd, });
-                        perror("execv");*/
-                        exit(1);
-                } else if (pid > 0) {
-                        waitpid(pid, &status, 0);
-                }
+                exit(0);
                 //retval = system(cmd);
                 fprintf(stdout, "Return status value for '%s': %d\n",
                         cmd, status);
