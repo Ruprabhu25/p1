@@ -8,10 +8,17 @@
 int main(void)
 {
         char cmd[CMDLINE_MAX];
+        pid_t pid;
+        const char* path = getenv("PATH");
+        //printf("%s\n", path);
+        //exit(0);
+        //char *cmd = "/bin/echo";
+        char *args[] = {cmd, "ECS150", NULL};
+        int status;
 
         while (1) {
                 char *nl;
-                int retval;
+                //int retval;
 
                 /* Print prompt */
                 printf("sshell$ ");
@@ -38,9 +45,17 @@ int main(void)
                 }
 
                 /* Regular command */
-                retval = system(cmd);
+                pid = fork();
+                if (pid == 0) {
+                        execv(cmd, args);
+                        perror("execv");
+                        exit(1);
+                } else if (pid > 0) {
+                        waitpid(pid, &status, 0);
+                }
+                //retval = system(cmd);
                 fprintf(stdout, "Return status value for '%s': %d\n",
-                        cmd, retval);
+                        cmd, status);
         }
 
         return EXIT_SUCCESS;
