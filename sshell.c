@@ -79,7 +79,10 @@ int main(void)
                 }
 
                 /* Regular command */
-                char* token_args = strtok(cmd, " ");
+                char cmd_copy[CMDLINE_MAX];
+                strcpy(cmd_copy,cmd);
+                //printf("total before: %s\n", cmd_copy);
+                char* token_args = strtok(cmd_copy, " ");
                 // loop through the string to extract all other tokens
                 while( token_args != NULL ) {
                         //printf( "token: %s\n", token_args ); //printing each token
@@ -87,8 +90,7 @@ int main(void)
                         num_args++;
                         token_args = strtok(NULL, " "); 
                         //printf("current node: %s\n", current_arg->val);                        token_args = strtok(NULL, " ");
-                }
-                //printf("current1: %s\n", current_arg->val);
+                }                //printf("current1: %s\n", current_arg->val);
                 char* args[num_args+1];
                 int arg_pos = 0;
                 //printf("args:\n");
@@ -110,16 +112,31 @@ int main(void)
                 // loop through the string to extract all other tokens
                 pid = fork();
                 if (pid == 0) {
-                        execvp(args[0], args);
+                        if (strcmp(args[0], "cd") == 0) {
+                                int wd_status;
+                                if (num_args == 1) { // command is "cd"
+                                        wd_status = chdir(NULL);
+                                } else { // num_args  > 1
+                                        wd_status = chdir(args[1]);
+                                }
+                                exit(wd_status);
+                        } else if (strcmp(args[0], "pwd") == 0) {
+                                char pwd_name[1024];
+                                getcwd(pwd_name, sizeof(pwd_name));
+                                printf("%s\n",pwd_name);
+                        } else {
+                                execvp(args[0], args);
+                                perror("execvp");
+                                exit(1);
+                        }
                         //perror("execvp");
-                        exit(0);
                 } else if (pid > 0) {
                         waitpid(pid, &status, 0);
-                }
+                } 
                 head_arg = NULL;
                 //}
                 //retval = system(cmd);
-                fprintf(stdout, "Return status value for '%s': %d\n",
+                fprintf(stdout, "+ completed '%s' [%d]\n",
                         cmd, status);
         }
         return EXIT_SUCCESS;
