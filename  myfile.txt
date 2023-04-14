@@ -1,0 +1,25 @@
+dup2
+called linked list
+token: echo
+node insertion: echo
+head called
+head arg: echo
+token: hello
+node insertion: hello
+add to end
+head arg: hello
+token: world
+node insertion: world
+add to end
+head arg: world
+insert into args:
+head: world args: world
+head: world args: world
+head: world args: world
+redir cmd: echo hello world 
+forking now:
+ made it to fork
+parent process
+child process
+arg0: L
++ completed 'echo hello world ' [1]
