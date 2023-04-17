@@ -47,7 +47,7 @@ void print_arr(char* args[], int size) {
         for (int i = 0; i<size; i++) {
                 printf("%s ", args[i]);
         }
-        //printf("\n");
+        printf("\n");
 }
 void cmd_cd(char* cmd, int num_args, char* args[]) {
         int cd_status = 0;
@@ -70,13 +70,16 @@ void cmd_cd(char* cmd, int num_args, char* args[]) {
         fprintf(stdout, "+ completed '%s' [%d]\n",
                         cmd, status);
 }
-void forking(char* cmd, char* args[]) {
+void forking(char* cmd, char* args[], int fd) {
         //printf(" made it to fork\n");
         int status;
         pid_t pid;
         if (!(pid = fork())) {
                 //printf("child process\n");
                 //printf("arg0: %s\n", args[0]);
+                if (fd != -1) {
+                        dup2(fd, STDOUT_FILENO);
+                }
                 execvp(args[0], args);
                 fprintf(stderr, "Error: command not found\n");
                 exit(1);
@@ -149,7 +152,7 @@ char** ll_to_arr(struct node* head, int num_args) {
                 //printf("end of loop\n");
         }
         args[arg_pos] = NULL;
-        print_arr(args, arg_pos);
+        //print_arr(args, arg_pos);
         return args;
 }
 void redirection(char* cmd, char* file_name, int* num_args, struct node* head_arg) {
@@ -164,23 +167,24 @@ void redirection(char* cmd, char* file_name, int* num_args, struct node* head_ar
         int fd;
         fd = open(file_name, O_CREAT | O_WRONLY | O_TRUNC, 0644);
         //printf("create fd\n");
-        dup2(fd, STDOUT_FILENO);
+        //dup2(fd, STDOUT_FILENO);
         //printf("dup2\n");
         *num_args = linked_list(redir_cmd, &head_arg, " ");
-        printf("%s\n", head_arg->val);
-        printf("\n");
+        //printf("%s\n", head_arg->val);
+        //printf("\n");
         char** args = ll_to_arr(head_arg,*num_args);
         //printf("redir cmd: %s\n",redir_cmd);
         //print_arr(args, num_args);
         //exit(0);
         //printf("forking now:\n");
-        forking(redir_cmd, args); 
+        forking(redir_cmd, args, fd); 
         close(fd);
-        dup2(STDERR_FILENO,STDOUT_FILENO);
+        //dup2(STDERR_FILENO,STDOUT_FILENO);
 }
-void pipeline(char *command1[], char *command2[]) {
+void pipeline(char *command1[], char *command2[], char* cmd) {
         pid_t p1, p2;
         int fd[2];
+        int status1, status2;
         pipe(fd);
 
         if (!(p1 = fork())) { /* Child #1 */
@@ -198,24 +202,33 @@ void pipeline(char *command1[], char *command2[]) {
 
         close(fd[0]); /* Pipe no longer needed in parent */
         close(fd[1]);
-        waitpid(p1, NULL, 0); /* Parent waits for two children */
-        waitpid(p2, NULL, 0);
+        waitpid(p1, &status1, 0); /* Parent waits for two children */
+        waitpid(p2, &status2, 0);
+        fprintf(stdout, "+ completed '%s' [%d][%d]\n",
+                cmd, WEXITSTATUS(status1), WEXITSTATUS(status2));
 }
 
-void double_pipeline(char* cmd1[], char* cmd2[], char* cmd3[]) {
+void double_pipeline(char* cmd1[], char* cmd2[], char* cmd3[], char* cmd) {
         pid_t p1, p2, p3;
+        int status1, status2, status3;
         int fd1[2];
         int fd2[2];
         pipe(fd1);
         pipe(fd2);
-
+        printf("%s %s\n", cmd1[0], cmd1[1]);
+        printf("%s %s\n", cmd2[0], cmd2[1]);
+        printf("%s %s\n", cmd3[0], cmd3[1]);
         if (!(p1 = fork())) { /* Child #1 */
+                printf("child1\n");
                 close(fd1[0]); /* No need for read access for pipe 1*/
                 dup2(fd1[1], STDOUT_FILENO); /* Replace stdout with pipe */
                 close(fd1[1]); /* Close now unused FD */
                 execvp(cmd1[0], cmd1); /* Child #1 becomes command1 */
+                perror("execvp");
+                exit(1);
         }
         if (!(p2 = fork())) { /* Child #2 */
+        printf("child2\n");
                 close(fd1[1]); /* No need for write access for pipe 1*/
                 close(fd2[0]); /* No need for read access for pipe 2*/
                 dup2(fd1[0], STDIN_FILENO); /* Replace stdin with pipe 1*/
@@ -223,23 +236,30 @@ void double_pipeline(char* cmd1[], char* cmd2[], char* cmd3[]) {
                 close(fd1[0]); /* Close now unused FD */
                 close(fd2[1]);
                 execvp(cmd2[0], cmd2); /* Child #2 becomes command2 */
+                perror("execvp");
+                exit(1);
         }
         if (!(p3 = fork())) {
+                printf("child3\n");
                 close(fd2[1]);
                 dup2(fd2[0], STDIN_FILENO);
-                close(fd2[1]);
+                close(fd2[0]);
                 execvp(cmd3[0], cmd3);
+                perror("execvp");
+                exit(1);
         }
 
         close(fd1[0]); /* Pipe no longer needed in parent */
         close(fd1[1]);
         close(fd2[0]);
         close(fd2[1]);
-        waitpid(p1, NULL, 0); /* Parent waits for two children */
-        waitpid(p2, NULL, 0);
-        waitpid(p3, NULL, 0);
+        waitpid(p1, &status1, 0); /* Parent waits for two children */
+        waitpid(p2, &status2, 0);
+        waitpid(p3, &status3, 0);
+        fprintf(stdout, "+ completed '%s' [%d][%d][%d]\n",
+        cmd, WEXITSTATUS(status1), WEXITSTATUS(status2), WEXITSTATUS(status3));
 }
-/*void pipeline_search(char* cmd, struct node* head_pipe) { // try to make each command in pipeline a linked list of args?
+void pipeline_search(char* cmd, struct node* head_pipe) { // try to make each command in pipeline a linked list of args?
         int num_pipes = linked_list(cmd,&head_pipe,"|") - 1;
         if (!num_pipes) {
                 return;
@@ -248,32 +268,46 @@ void double_pipeline(char* cmd1[], char* cmd2[], char* cmd3[]) {
                 if (num_pipes == 1) {
                         struct node* head_args1 = NULL;
                         struct node* head_args2 = NULL;
-                        int num_args1 = linked_list(head_pipe->val, &head_args1, ' ');
-                        int num_args2 = linked_list(head_pipe->next->val, &head_args2, ' ');
+                        int num_args1 = linked_list(head_pipe->val, &head_args1, " ");
+                        int num_args2 = linked_list(head_pipe->next->val, &head_args2, " ");
+                        char** args1 = ll_to_arr(head_args1, num_args1);
+                        char** args2 = ll_to_arr(head_args2, num_args2);
                         //print_arr();
-                        printf("piping");
-                        //pipeline();
+                        //printf("single piping");
+                        pipeline(args1, args2, cmd);
                 }
                 else if (num_pipes == 2) {
                         struct node* head_args1 = NULL;
                         struct node* head_args2 = NULL;
                         struct node* head_args3 = NULL;
-                        int num_args1 = linked_list(head_pipe->val, &head_args1, ' ');
-                        int num_args2 = linked_list(head_pipe->next->val, &head_args2, ' ');
-                        int num_args3 = linked_list(head_pipe->next->next->val, &head_args2, ' ');
-                        printf("double piping");
-                        //double_pipeline();
+                        /*printf("1). %s\n", head_pipe->val);
+                        printf("2). %s\n", head_pipe->next->val);
+                        printf("3). %s\n", head_pipe->next->next->val);*/
+                        int num_args1 = linked_list(head_pipe->val, &head_args1, " ");
+                        int num_args2 = linked_list(head_pipe->next->val, &head_args2, " ");
+                        int num_args3 = linked_list(head_pipe->next->next->val, &head_args3, " ");
+                        char** args1 = ll_to_arr(head_args1, num_args1);
+                        char** args2 = ll_to_arr(head_args2, num_args2);
+                        char** args3 = ll_to_arr(head_args3, num_args3);
+                        /*printf("1. ");
+                        print_arr(args1, num_args1);
+                        printf("2. ");
+                        print_arr(args2, num_args2);
+                        printf("3. ");
+                        print_arr(args3, num_args3);*/
+                        printf("double piping\n");
+                        double_pipeline(args1, args2, args3, cmd);
                 }
                 else {
                         fprintf(stderr, "too many pipes");
                         exit(0);
                 }
         }
-}*/
+}
 int main(void) {
         char cmd[CMDLINE_MAX];
         struct node *head_arg = NULL;
-        //struct node *head_pipe = NULL;
+        struct node *head_pipe = NULL;
 
         while (1) {
                 char *nl;
@@ -306,12 +340,13 @@ int main(void) {
 
                 /* Regular command */
                 /* Search for piping */
-
+                pipeline_search(cmd, head_pipe);
+                //exit(0);
 
                 // output redirection
                 char *file_name;
                 file_name = strchr(cmd, '>');
-                printf("test0\n");
+                //printf("test0\n");
                 if (file_name != NULL)  {
                         //printf("redirected\n");
                         redirection(cmd,file_name,&num_args,head_arg);
@@ -350,7 +385,7 @@ int main(void) {
                         }
                         else {
                                 //printf("args[0]: %s", args[0]);
-                                forking(cmd,args);
+                                forking(cmd,args,-1);
                         }
                 }
                 head_arg = NULL;
