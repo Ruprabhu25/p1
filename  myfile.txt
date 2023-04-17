@@ -1,2 +1,7 @@
-hello 3
-+ completed 'echo hello 3 ' [0]
+node insertion: echo
+node insertion: hello
+node insertion: world
+echo
+
+hello world
+echo hello world + completed 'echo hello world ' [0]

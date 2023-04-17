@@ -26,7 +26,7 @@ void add_node(char* str_value, struct node **head, struct node **current) {
 	struct node *newNode = (struct node*) malloc(sizeof(struct node));
 	newNode->val = str_value;
 	newNode->next = NULL;
-        printf("node insertion: %s\n", newNode->val);
+        //printf("node insertion: %s\n", newNode->val);
 
 	//if head is NULL, the list is empty
 	if(*head == NULL) {
@@ -74,34 +74,28 @@ void forking(char* cmd, char* args[]) {
         //printf(" made it to fork\n");
         int status;
         pid_t pid;
-        pid = fork();
-        if (pid == 0) {
+        if (!(pid = fork())) {
                 //printf("child process\n");
                 //printf("arg0: %s\n", args[0]);
                 execvp(args[0], args);
                 fprintf(stderr, "Error: command not found\n");
                 exit(1);
-        } else if (pid > 0) {
+        } else {
                 //printf("parent process\n");
                 waitpid(pid, &status, 0);
                 fprintf(stdout, "+ completed '%s' [%d]\n",
                         cmd, WEXITSTATUS(status));
         }       
 }
-int linked_list(char* cmd, struct node** head) {
+int linked_list(char* cmd, struct node** head, char* delimiter) {
         //printf("called linked list\n");
         int num_args = 0;
         char cmd_copy[CMDLINE_MAX];
         strcpy(cmd_copy,cmd);
         //printf("total before: %s\n", cmd_copy);
-        char* token_args = strtok(cmd_copy, " ");
+        char* token_args = strtok(cmd_copy, delimiter);
         // loop through the string to extract all other tokens
         while( token_args != NULL ) {
-                //char token[strlen(token_args)+1];
-                //strcpy(token,token_args);
-                //token[strlen(token_args)] = '\0';
-                //printf("token: %s\n", token_args);
-                
                 // create new node with value of pattern
                 struct node *newNode = (struct node*) malloc(sizeof(struct node));
                 newNode->val = malloc(strlen(token_args) + 1);
@@ -131,34 +125,75 @@ int linked_list(char* cmd, struct node** head) {
                         lastNode->next = newNode;
                 }
                 (num_args)++;
-                token_args = strtok(NULL, " "); 
+                token_args = strtok(NULL, delimiter); 
         }              
         //printf("list:\n");
         //printList(*head);
         return num_args;
 }
-void pipeline(char* cmd1, char* cmd2, char* cmd3) {
-        pid_t p1, p2, p3;
-        int fd1[2];
-        int fd2[2];
-        pipe(fd1);
-        if (cmd3 != NULL) {
-                pipe(fd2);
+char** ll_to_arr(struct node* head, int num_args) {
+        int arg_pos = 0;
+        char** args = (char**) malloc(sizeof(char*) * (num_args+1));
+        struct node* temp = head;
+        //printList(temp);
+        while (temp != NULL) {
+                //printf("%d %s\n", arg_pos, head_arg->val);
+                //printf("temp: %s args: %s\n", temp->val, args[arg_pos]);
+                args[arg_pos] = malloc(strlen(temp->val)+1);
+                strcpy(args[arg_pos],temp->val); //CHECK OUT
+                //printf("temp: %s\n", temp->val);
+                //memcpy(args[arg_pos], temp->val, strlen(temp->val));
+                //printf("temp: %s args:\n", temp->val);
+                temp = temp->next;
+                arg_pos++;
+                //printf("end of loop\n");
         }
+        args[arg_pos] = NULL;
+        print_arr(args, arg_pos);
+        return args;
+}
+void redirection(char* cmd, char* file_name, int* num_args, struct node* head_arg) {
+        // means we found a ">" character
+        //printf("found a '>' at %s\n", file_name);
+        int length_redir = file_name - cmd; // find index of ">"
+        char redir_cmd[length_redir];
+        memcpy(redir_cmd, cmd, length_redir); // copy substring before ">" to redir_cmd
+        redir_cmd[length_redir] = '\0'; //end string with null character
+        file_name = file_name + 1;
+        //printf("redir_cmd: %s, file_name: %s\n", redir_cmd, file_name);
+        int fd;
+        fd = open(file_name, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+        //printf("create fd\n");
+        dup2(fd, STDOUT_FILENO);
+        //printf("dup2\n");
+        *num_args = linked_list(redir_cmd, &head_arg, " ");
+        printf("%s\n", head_arg->val);
+        printf("\n");
+        char** args = ll_to_arr(head_arg,*num_args);
+        //printf("redir cmd: %s\n",redir_cmd);
+        //print_arr(args, num_args);
+        //exit(0);
+        //printf("forking now:\n");
+        forking(redir_cmd, args); 
+        close(fd);
+        dup2(STDERR_FILENO,STDOUT_FILENO);
+}
+void pipeline(char *command1[], char *command2[]) {
+        pid_t p1, p2;
+        int fd[2];
+        pipe(fd);
 
         if (!(p1 = fork())) { /* Child #1 */
-                close(fd1[0]); /* No need for read access for pipe 1*/
-                dup2(fd1[1], STDOUT_FILENO); /* Replace stdout with pipe */
-                close(fd1[1]); /* Close now unused FD */
-                exec(cmd1); /* Child #1 becomes command1 */
+                close(fd[0]); /* No need for read access */
+                dup2(fd[1], STDOUT_FILENO); /* Replace stdout with pipe */
+                close(fd[1]); /* Close now unused FD */
+                execvp(command1[0], command1); /* Child #1 becomes command1 */
         }
         if (!(p2 = fork())) { /* Child #2 */
-                close(fd1[1]); /* No need for write access for pipe 1*/
-                close(fd2[0]); /* No need for read access for pipe 2*/
-                dup2(fd1[0], STDIN_FILENO); /* Replace stdin with pipe 1*/
-                dup2(fd2[1], STDOUT_FILENO); /* Replace stdout with pipe 2*/
-                close(fd1[0]); /* Close now unused FD */
-                exec(cmd2); /* Child #2 becomes command2 */
+                close(fd[1]); /* No need for write access */
+                dup2(fd[0], STDIN_FILENO); /* Replace stdin with pipe */
+                close(fd[0]); /* Close now unused FD */
+                execvp(command2[0], command2); /* Child #2 becomes command2 */
         }
 
         close(fd[0]); /* Pipe no longer needed in parent */
@@ -166,9 +201,79 @@ void pipeline(char* cmd1, char* cmd2, char* cmd3) {
         waitpid(p1, NULL, 0); /* Parent waits for two children */
         waitpid(p2, NULL, 0);
 }
+
+void double_pipeline(char* cmd1[], char* cmd2[], char* cmd3[]) {
+        pid_t p1, p2, p3;
+        int fd1[2];
+        int fd2[2];
+        pipe(fd1);
+        pipe(fd2);
+
+        if (!(p1 = fork())) { /* Child #1 */
+                close(fd1[0]); /* No need for read access for pipe 1*/
+                dup2(fd1[1], STDOUT_FILENO); /* Replace stdout with pipe */
+                close(fd1[1]); /* Close now unused FD */
+                execvp(cmd1[0], cmd1); /* Child #1 becomes command1 */
+        }
+        if (!(p2 = fork())) { /* Child #2 */
+                close(fd1[1]); /* No need for write access for pipe 1*/
+                close(fd2[0]); /* No need for read access for pipe 2*/
+                dup2(fd1[0], STDIN_FILENO); /* Replace stdin with pipe 1*/
+                dup2(fd2[1], STDOUT_FILENO); /* Replace stdout with pipe 2*/
+                close(fd1[0]); /* Close now unused FD */
+                close(fd2[1]);
+                execvp(cmd2[0], cmd2); /* Child #2 becomes command2 */
+        }
+        if (!(p3 = fork())) {
+                close(fd2[1]);
+                dup2(fd2[0], STDIN_FILENO);
+                close(fd2[1]);
+                execvp(cmd3[0], cmd3);
+        }
+
+        close(fd1[0]); /* Pipe no longer needed in parent */
+        close(fd1[1]);
+        close(fd2[0]);
+        close(fd2[1]);
+        waitpid(p1, NULL, 0); /* Parent waits for two children */
+        waitpid(p2, NULL, 0);
+        waitpid(p3, NULL, 0);
+}
+/*void pipeline_search(char* cmd, struct node* head_pipe) { // try to make each command in pipeline a linked list of args?
+        int num_pipes = linked_list(cmd,&head_pipe,"|") - 1;
+        if (!num_pipes) {
+                return;
+        }
+        else { // find way to create linked list of args per node of linked list of pipeline
+                if (num_pipes == 1) {
+                        struct node* head_args1 = NULL;
+                        struct node* head_args2 = NULL;
+                        int num_args1 = linked_list(head_pipe->val, &head_args1, ' ');
+                        int num_args2 = linked_list(head_pipe->next->val, &head_args2, ' ');
+                        //print_arr();
+                        printf("piping");
+                        //pipeline();
+                }
+                else if (num_pipes == 2) {
+                        struct node* head_args1 = NULL;
+                        struct node* head_args2 = NULL;
+                        struct node* head_args3 = NULL;
+                        int num_args1 = linked_list(head_pipe->val, &head_args1, ' ');
+                        int num_args2 = linked_list(head_pipe->next->val, &head_args2, ' ');
+                        int num_args3 = linked_list(head_pipe->next->next->val, &head_args2, ' ');
+                        printf("double piping");
+                        //double_pipeline();
+                }
+                else {
+                        fprintf(stderr, "too many pipes");
+                        exit(0);
+                }
+        }
+}*/
 int main(void) {
         char cmd[CMDLINE_MAX];
         struct node *head_arg = NULL;
+        //struct node *head_pipe = NULL;
 
         while (1) {
                 char *nl;
@@ -200,54 +305,16 @@ int main(void) {
                 }
 
                 /* Regular command */
+                /* Search for piping */
+
 
                 // output redirection
                 char *file_name;
                 file_name = strchr(cmd, '>');
-                //printf("test0\n");
+                printf("test0\n");
                 if (file_name != NULL)  {
-                        // means we found a ">" character
-                        //printf("found a '>' at %s\n", file_name);
-                        int length_redir = file_name - cmd; // find index of ">"
-                        char redir_cmd[length_redir];
-                        memcpy(redir_cmd, cmd, length_redir); // copy substring before ">" to redir_cmd
-                        redir_cmd[length_redir] = '\0'; //end string with null character
-                        file_name = file_name + 1;
-                        //printf("redir_cmd: %s, file_name: %s\n", redir_cmd, file_name);
-                        int fd;
-                        fd = open(file_name, O_CREAT | O_WRONLY | O_TRUNC, 0644);
-                        //printf("create fd\n");
-                        dup2(fd, STDOUT_FILENO);
-                        //printf("dup2\n");
-                        num_args = linked_list(redir_cmd, &head_arg);
-                        char* args[(num_args)+1];
-                        int arg_pos = 0;
-                        //exit(0);
-                        //printf("num args: %d\n", num_args);
-                        //printf("current2: %s\n", current_arg->val);
-                        //printf("insert into args:\n");
-                        struct node* temp = head_arg;
-                        //printList(temp);
-                        while (temp != NULL) {
-                                //printf("%d %s\n", arg_pos, head_arg->val);
-                                //printf("temp: %s args: %s\n", temp->val, args[arg_pos]);
-                                args[arg_pos] = malloc(strlen(temp->val)+1);
-                                strcpy(args[arg_pos],temp->val); //CHECK OUT
-                                //printf("temp: %s\n", temp->val);
-                                //memcpy(args[arg_pos], temp->val, strlen(temp->val));
-                                //printf("temp: %s args:\n", temp->val);
-                                temp = temp->next;
-                                arg_pos++;
-                                //printf("end of loop\n");
-                        }
-                        args[arg_pos] = NULL;
-                        //printf("redir cmd: %s\n",redir_cmd);
-                        //print_arr(args, num_args);
-                        //exit(0);
-                        //printf("forking now:\n");
-                        forking(redir_cmd, args); 
-                        close(fd);
-                        dup2(STDERR_FILENO,STDOUT_FILENO);
+                        //printf("redirected\n");
+                        redirection(cmd,file_name,&num_args,head_arg);
                 }
                 else {
                         //printf("test1\n");
@@ -260,7 +327,7 @@ int main(void) {
                         //char* token_path = strtok(path, ":");
                         // loop through the string to extract all other tokens
                         //check if it is a built in command, then we don't have to fork
-                        num_args = linked_list(cmd, &head_arg);
+                        num_args = linked_list(cmd, &head_arg, " ");
                         char* args[(num_args)+1];
                         int arg_pos = 0;
                         //printf("args:\n");
