@@ -3,6 +3,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <ctype.h>
 
 #define CMDLINE_MAX 512
 struct node {
@@ -49,6 +50,27 @@ void print_arr(char* args[], int size) {
         }
         printf("\n");
 }
+char* trimwhitespace(char *str)
+{
+  char *end;
+
+  // Trim leading space
+  while(isspace((unsigned char)*str)) str++;
+
+  if(*str == 0)  // All spaces?
+    return str;
+
+  // Trim trailing space
+  end = str + strlen(str) - 1;
+  while(end > str && isspace((unsigned char)*end)) {
+        end--;
+  } 
+
+  // Write new null terminator character
+  end[1] = '\0';
+
+  return str;
+}
 void cmd_cd(char* cmd, int num_args, char* args[]) {
         int cd_status = 0;
         int status;
@@ -74,6 +96,7 @@ void forking(char* cmd, char* args[], int fd) {
         //printf(" made it to fork\n");
         int status;
         pid_t pid;
+
         if (!(pid = fork())) {
                 //printf("child process\n");
                 //printf("arg0: %s\n", args[0]);
@@ -81,6 +104,7 @@ void forking(char* cmd, char* args[], int fd) {
                         dup2(fd, STDOUT_FILENO);
                 }
                 execvp(args[0], args);
+                //perror("execvp");
                 fprintf(stderr, "Error: command not found\n");
                 exit(1);
         } else {
@@ -162,10 +186,10 @@ void redirection(char* cmd, char* file_name, int* num_args, struct node* head_ar
         char redir_cmd[length_redir];
         memcpy(redir_cmd, cmd, length_redir); // copy substring before ">" to redir_cmd
         redir_cmd[length_redir] = '\0'; //end string with null character
-        file_name = file_name + 1;
+        file_name = trimwhitespace(file_name+1);
         //printf("redir_cmd: %s, file_name: %s\n", redir_cmd, file_name);
         int fd;
-        fd = open(file_name, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+        fd = open(file_name, O_CREAT | O_RDWR | O_TRUNC, 0644);
         //printf("create fd\n");
         //dup2(fd, STDOUT_FILENO);
         //printf("dup2\n");
@@ -253,16 +277,19 @@ void double_pipeline(char* cmd1[], char* cmd2[], char* cmd3[], char* cmd) {
         close(fd1[1]);
         close(fd2[0]);
         close(fd2[1]);
-        waitpid(p1, &status1, 0); /* Parent waits for two children */
+        waitpid(p1, &status1, 0); /* Parent waits for three children */
+        printf("child 1 done");
         waitpid(p2, &status2, 0);
+        printf("child 2 done");
         waitpid(p3, &status3, 0);
+        printf("child 3 done");
         fprintf(stdout, "+ completed '%s' [%d][%d][%d]\n",
         cmd, WEXITSTATUS(status1), WEXITSTATUS(status2), WEXITSTATUS(status3));
 }
-void pipeline_search(char* cmd, struct node* head_pipe) { // try to make each command in pipeline a linked list of args?
+int pipeline_search(char* cmd, struct node* head_pipe) { // try to make each command in pipeline a linked list of args?
         int num_pipes = linked_list(cmd,&head_pipe,"|") - 1;
         if (!num_pipes) {
-                return;
+                return 0;
         }
         else { // find way to create linked list of args per node of linked list of pipeline
                 if (num_pipes == 1) {
@@ -303,6 +330,7 @@ void pipeline_search(char* cmd, struct node* head_pipe) { // try to make each co
                         exit(0);
                 }
         }
+        return 1;
 }
 int main(void) {
         char cmd[CMDLINE_MAX];
@@ -339,56 +367,57 @@ int main(void) {
                 }
 
                 /* Regular command */
-                /* Search for piping */
-                pipeline_search(cmd, head_pipe);
-                //exit(0);
+                /* Search for piping first */
+                if (!pipeline_search(cmd, head_pipe)) {
+                        //exit(0);
 
-                // output redirection
-                char *file_name;
-                file_name = strchr(cmd, '>');
-                //printf("test0\n");
-                if (file_name != NULL)  {
-                        //printf("redirected\n");
-                        redirection(cmd,file_name,&num_args,head_arg);
-                }
-                else {
-                        //printf("test1\n");
-                        
-                        //printf("%d\n", num_args);
-                        //print_arr(args, num_args);
-                        //printf("%d\n", arg_pos);
-                        //printf("command: %s\n", cmd);
-                        //char* path = getenv("PATH");
-                        //char* token_path = strtok(path, ":");
-                        // loop through the string to extract all other tokens
-                        //check if it is a built in command, then we don't have to fork
-                        num_args = linked_list(cmd, &head_arg, " ");
-                        char* args[(num_args)+1];
-                        int arg_pos = 0;
-                        //printf("args:\n");
-                        //printf("current2: %s\n", current_arg->val);
-                        while (head_arg != NULL) {
-                                //printf("%d %s\n", arg_pos, head_arg->val);
-                                //printf("current: %s\n", current_arg->val);
-                                args[arg_pos] = head_arg -> val;
-                                head_arg = head_arg->next;
-                                arg_pos++;
-                        }
-                        args[arg_pos] = NULL;
-                        //printf("test2\n");
-                        if (strcmp(args[0], "cd") == 0) {
-                                cmd_cd(cmd,num_args,args);
-                        } else if (strcmp(args[0], "pwd") == 0) {
-                                char pwd_name[1024];
-                                getcwd(pwd_name, sizeof(pwd_name));
-                                printf("%s\n",pwd_name);
+                        // output redirection
+                        char *file_name;
+                        file_name = strchr(cmd, '>');
+                        //printf("test0\n");
+                        if (file_name != NULL)  {
+                                //printf("redirected\n");
+                                redirection(cmd,file_name,&num_args,head_arg);
                         }
                         else {
-                                //printf("args[0]: %s", args[0]);
-                                forking(cmd,args,-1);
+                                //printf("test1\n");
+                                
+                                //printf("%d\n", num_args);
+                                //print_arr(args, num_args);
+                                //printf("%d\n", arg_pos);
+                                //printf("command: %s\n", cmd);
+                                //char* path = getenv("PATH");
+                                //char* token_path = strtok(path, ":");
+                                // loop through the string to extract all other tokens
+                                //check if it is a built in command, then we don't have to fork
+                                num_args = linked_list(cmd, &head_arg, " ");
+                                char* args[(num_args)+1];
+                                int arg_pos = 0;
+                                //printf("args:\n");
+                                //printf("current2: %s\n", current_arg->val);
+                                while (head_arg != NULL) {
+                                        //printf("%d %s\n", arg_pos, head_arg->val);
+                                        //printf("current: %s\n", current_arg->val);
+                                        args[arg_pos] = head_arg -> val;
+                                        head_arg = head_arg->next;
+                                        arg_pos++;
+                                }
+                                args[arg_pos] = NULL;
+                                //printf("test2\n");
+                                if (strcmp(args[0], "cd") == 0) {
+                                        cmd_cd(cmd,num_args,args);
+                                } else if (strcmp(args[0], "pwd") == 0) {
+                                        char pwd_name[1024];
+                                        getcwd(pwd_name, sizeof(pwd_name));
+                                        printf("%s\n",pwd_name);
+                                }
+                                else {
+                                        //printf("args[0]: %s", args[0]);
+                                        forking(cmd,args,-1);
+                                }
                         }
+                        head_arg = NULL;
                 }
-                head_arg = NULL;
         }
         return EXIT_SUCCESS;
 }
