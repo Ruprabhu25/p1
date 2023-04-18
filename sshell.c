@@ -10,6 +10,24 @@ struct node {
 	char* val;
 	struct node* next;
 };
+struct proc {
+        //char* cmd;
+        char** args;
+        pid_t pid;
+        int retval;
+};
+void freeList(struct node* head)
+{
+   struct node* current;
+
+   while (head != NULL)
+    {
+       current = head;
+       head = head->next;
+       free(current);
+    }
+
+}
 void printList(struct node *head)
 {
     struct node *temp = head;
@@ -92,26 +110,34 @@ void cmd_cd(char* cmd, int num_args, char* args[]) {
         fprintf(stdout, "+ completed '%s' [%d]\n",
                         cmd, status);
 }
-void forking(char* cmd, char* args[], int fd) {
+int forking(char* args[], int read_fd, int write_fd) {
         //printf(" made it to fork\n");
         int status;
         pid_t pid;
-
+        //printf("read %d, write %d\n", read_fd, write_fd);
         if (!(pid = fork())) {
-                //printf("child process\n");
-                //printf("arg0: %s\n", args[0]);
-                if (fd != -1) {
-                        dup2(fd, STDOUT_FILENO);
+                //printf("child process %d\n", getpid());
+
+                if (read_fd != 0) {
+                        //printf("closed read: %d\n", read_fd);
+                        dup2(read_fd, STDIN_FILENO);
+                        close(read_fd); // not needed anymore
+                }
+                if (write_fd != 1) {
+                        //printf("closed write: %d\n", write_fd);
+                        dup2(write_fd, STDOUT_FILENO);
+                        close(write_fd); // not needed anymore
                 }
                 execvp(args[0], args);
-                //perror("execvp");
+                perror("execvp");
                 fprintf(stderr, "Error: command not found\n");
                 exit(1);
         } else {
-                //printf("parent process\n");
+                //close(read_fd);
+                //close(write_fd);
                 waitpid(pid, &status, 0);
-                fprintf(stdout, "+ completed '%s' [%d]\n",
-                        cmd, WEXITSTATUS(status));
+                //printf("parent process\n");
+                return status;
         }       
 }
 int linked_list(char* cmd, struct node** head, char* delimiter) {
@@ -179,7 +205,9 @@ char** ll_to_arr(struct node* head, int num_args) {
         //print_arr(args, arg_pos);
         return args;
 }
-void redirection(char* cmd, char* file_name, int* num_args, struct node* head_arg) {
+void redirection(char* cmd, char* file_name) {
+        int num_args;
+        struct node* head_arg;
         // means we found a ">" character
         //printf("found a '>' at %s\n", file_name);
         int length_redir = file_name - cmd; // find index of ">"
@@ -193,98 +221,28 @@ void redirection(char* cmd, char* file_name, int* num_args, struct node* head_ar
         //printf("create fd\n");
         //dup2(fd, STDOUT_FILENO);
         //printf("dup2\n");
-        *num_args = linked_list(redir_cmd, &head_arg, " ");
+        num_args = linked_list(redir_cmd, &head_arg, " ");
         //printf("%s\n", head_arg->val);
         //printf("\n");
-        char** args = ll_to_arr(head_arg,*num_args);
+        char** args = ll_to_arr(head_arg,num_args);
         //printf("redir cmd: %s\n",redir_cmd);
         //print_arr(args, num_args);
         //exit(0);
         //printf("forking now:\n");
-        forking(redir_cmd, args, fd); 
+        forking(args, 0,fd); 
         close(fd);
         //dup2(STDERR_FILENO,STDOUT_FILENO);
 }
-void pipeline(char *command1[], char *command2[], char* cmd) {
-        pid_t p1, p2;
-        int fd[2];
-        int status1, status2;
-        pipe(fd);
-
-        if (!(p1 = fork())) { /* Child #1 */
-                close(fd[0]); /* No need for read access */
-                dup2(fd[1], STDOUT_FILENO); /* Replace stdout with pipe */
-                close(fd[1]); /* Close now unused FD */
-                execvp(command1[0], command1); /* Child #1 becomes command1 */
+int find_redirection(char* cmd) {
+        char *file_name;
+        file_name = strchr(cmd, '>');
+        //printf("test0\n");
+        if (file_name != NULL)  {
+        //printf("redirected\n");
+                redirection(cmd,file_name);
+                return 1;
         }
-        if (!(p2 = fork())) { /* Child #2 */
-                close(fd[1]); /* No need for write access */
-                dup2(fd[0], STDIN_FILENO); /* Replace stdin with pipe */
-                close(fd[0]); /* Close now unused FD */
-                execvp(command2[0], command2); /* Child #2 becomes command2 */
-        }
-
-        close(fd[0]); /* Pipe no longer needed in parent */
-        close(fd[1]);
-        waitpid(p1, &status1, 0); /* Parent waits for two children */
-        waitpid(p2, &status2, 0);
-        fprintf(stdout, "+ completed '%s' [%d][%d]\n",
-                cmd, WEXITSTATUS(status1), WEXITSTATUS(status2));
-}
-
-void double_pipeline(char* cmd1[], char* cmd2[], char* cmd3[], char* cmd) {
-        pid_t p1, p2, p3;
-        int status1, status2, status3;
-        int fd1[2];
-        int fd2[2];
-        pipe(fd1);
-        pipe(fd2);
-        //printf("%s \n", cmd1[0]);
-        //printf("%s \n", cmd2[0]);
-        //printf("%s \n", cmd3[0]);
-        if (!(p1 = fork())) { /* Child #1 */
-                printf("child1\n");
-                close(fd1[0]); /* No need for read access for pipe 1*/
-                dup2(fd1[1], STDOUT_FILENO); /* Replace stdout with pipe */
-                close(fd1[1]); /* Close now unused FD */
-                execvp(cmd1[0], cmd1); /* Child #1 becomes command1 */
-                perror("execvp");
-                exit(1);
-        }
-        if (!(p2 = fork())) { /* Child #2 */
-        printf("child2\n");
-                close(fd1[1]); /* No need for write access for pipe 1*/
-                close(fd2[0]); /* No need for read access for pipe 2*/
-                dup2(fd1[0], STDIN_FILENO); /* Replace stdin with pipe 1*/
-                dup2(fd2[1], STDOUT_FILENO); /* Replace stdout with pipe 2*/
-                close(fd1[0]); /* Close now unused FD */
-                close(fd2[1]);
-                execvp(cmd2[0], cmd2); /* Child #2 becomes command2 */
-                perror("execvp");
-                exit(1);
-        }
-        if (!(p3 = fork())) {
-                printf("child3\n");
-                close(fd2[1]);
-                dup2(fd2[0], STDIN_FILENO);
-                close(fd2[0]);
-                execvp(cmd3[0], cmd3);
-                perror("execvp");
-                exit(1);
-        }
-
-        close(fd1[0]); /* Pipe no longer needed in parent */
-        close(fd1[1]);
-        close(fd2[0]);
-        close(fd2[1]);
-        waitpid(p1, &status1, 0); /* Parent waits for three children */
-        //printf("child 1 done");
-        waitpid(p2, &status2, 0);
-        //printf("child 2 done");
-        waitpid(p3, &status3, 0);
-        //printf("child 3 done");
-        fprintf(stdout, "+ completed '%s' [%d][%d][%d]\n",
-        cmd, WEXITSTATUS(status1), WEXITSTATUS(status2), WEXITSTATUS(status3));
+        return 0;
 }
 int pipeline_search(char* cmd, struct node* head_pipe) { // try to make each command in pipeline a linked list of args?
         int num_pipes = linked_list(cmd,&head_pipe,"|") - 1;
@@ -326,7 +284,7 @@ int pipeline_search(char* cmd, struct node* head_pipe) { // try to make each com
                         double_pipeline(args1, args2, args3, cmd);
                 }
                 else if (num_pipes == 3) {
-                        
+
                 }
                 else {
                         fprintf(stderr, "too many pipes");
@@ -335,15 +293,49 @@ int pipeline_search(char* cmd, struct node* head_pipe) { // try to make each com
         }
         return 1;
 }
+int pipeline_general(char* cmd) {
+        struct node* head_pipe;
+        int num_commands = linked_list(cmd,&head_pipe,"|"); // find number of commands
+        int i;
+        int fd[2];
+        int input_fd = 0; // for first child process, stdin is the default, we are not reading from other pipes
+        int num_args;
+        int status;
+        if (num_commands == 1) { // treat as regular command, can exit
+                return 1;
+        }
+        for (i = 0; i < num_commands; i++) {
+                struct node* head_arg = NULL;
+                char** args;
+                pipe(fd);
+                if (head_pipe != NULL) {
+                        num_args = linked_list(head_pipe->val, &head_arg, " ");
+                        args = ll_to_arr(head_arg,num_args);
+                        head_pipe = head_pipe->next;
+                }
+                if (i == num_commands - 1) {
+                        status = forking(args, input_fd, 1);
+                }
+                else {
+                        status = forking(args, input_fd, fd[1]);
+                }
+                printf("status: %d\n", status);
+                close(fd[1]);
+                input_fd = fd[0];
+                freeList(head_arg);
+                for (int i = 0; i < num_args; i++) {
+                        free(args[i]);
+                }
+                free(args);
+        }
+        return 0;
+}
 int main(void) {
         char cmd[CMDLINE_MAX];
-        struct node *head_arg = NULL;
-        struct node *head_pipe = NULL;
 
         while (1) {
                 char *nl;
                 //int retval;
-                int num_args = 0;
 
                 /* Print prompt */
                 printf("sshell$ ");
@@ -369,57 +361,37 @@ int main(void) {
                         break;
                 }
 
-                /* Regular command */
-                /* Search for piping first */
-                if (!pipeline_search(cmd, head_pipe)) {
-                        //exit(0);
+                /* Piped commands */
+                if (pipeline_general(cmd)) {
 
-                        // output redirection
-                        char *file_name;
-                        file_name = strchr(cmd, '>');
-                        //printf("test0\n");
-                        if (file_name != NULL)  {
-                                //printf("redirected\n");
-                                redirection(cmd,file_name,&num_args,head_arg);
+                }
+
+                /* Redirected commands*/
+                else if (find_redirection(cmd)) {
+
+                }
+                else {/* Regular, single command */
+                        int num_args;
+                        struct node* head_arg = NULL;
+                        num_args = linked_list(cmd, &head_arg, " ");
+                        char** args = ll_to_arr(head_arg, num_args);
+                        if (strcmp(args[0], "cd") == 0) {
+                                cmd_cd(cmd,num_args,args);
+                        } 
+                        else if (strcmp(args[0], "pwd") == 0) {
+                                char pwd_name[1024];
+                                getcwd(pwd_name, sizeof(pwd_name));
+                                printf("%s\n",pwd_name);
                         }
                         else {
-                                //printf("test1\n");
-                                
-                                //printf("%d\n", num_args);
-                                //print_arr(args, num_args);
-                                //printf("%d\n", arg_pos);
-                                //printf("command: %s\n", cmd);
-                                //char* path = getenv("PATH");
-                                //char* token_path = strtok(path, ":");
-                                // loop through the string to extract all other tokens
-                                //check if it is a built in command, then we don't have to fork
-                                num_args = linked_list(cmd, &head_arg, " ");
-                                char* args[(num_args)+1];
-                                int arg_pos = 0;
-                                //printf("args:\n");
-                                //printf("current2: %s\n", current_arg->val);
-                                while (head_arg != NULL) {
-                                        //printf("%d %s\n", arg_pos, head_arg->val);
-                                        //printf("current: %s\n", current_arg->val);
-                                        args[arg_pos] = head_arg -> val;
-                                        head_arg = head_arg->next;
-                                        arg_pos++;
-                                }
-                                args[arg_pos] = NULL;
-                                //printf("test2\n");
-                                if (strcmp(args[0], "cd") == 0) {
-                                        cmd_cd(cmd,num_args,args);
-                                } else if (strcmp(args[0], "pwd") == 0) {
-                                        char pwd_name[1024];
-                                        getcwd(pwd_name, sizeof(pwd_name));
-                                        printf("%s\n",pwd_name);
-                                }
-                                else {
-                                        //printf("args[0]: %s", args[0]);
-                                        forking(cmd,args,-1);
-                                }
+                                //printf("args[0]: %s", args[0]);
+                                forking(args,0,1);
                         }
-                        head_arg = NULL;
+                        freeList(head_arg);
+                        for (int i = 0; i < num_args; i++) {
+                                free(args[i]);
+                        }
+                        free(args);
                 }
         }
         return EXIT_SUCCESS;
