@@ -239,9 +239,9 @@ void double_pipeline(char* cmd1[], char* cmd2[], char* cmd3[], char* cmd) {
         int fd2[2];
         pipe(fd1);
         pipe(fd2);
-        printf("%s %s\n", cmd1[0], cmd1[1]);
-        printf("%s %s\n", cmd2[0], cmd2[1]);
-        printf("%s %s\n", cmd3[0], cmd3[1]);
+        //printf("%s \n", cmd1[0]);
+        //printf("%s \n", cmd2[0]);
+        //printf("%s \n", cmd3[0]);
         if (!(p1 = fork())) { /* Child #1 */
                 printf("child1\n");
                 close(fd1[0]); /* No need for read access for pipe 1*/
@@ -278,11 +278,11 @@ void double_pipeline(char* cmd1[], char* cmd2[], char* cmd3[], char* cmd) {
         close(fd2[0]);
         close(fd2[1]);
         waitpid(p1, &status1, 0); /* Parent waits for three children */
-        printf("child 1 done");
+        //printf("child 1 done");
         waitpid(p2, &status2, 0);
-        printf("child 2 done");
+        //printf("child 2 done");
         waitpid(p3, &status3, 0);
-        printf("child 3 done");
+        //printf("child 3 done");
         fprintf(stdout, "+ completed '%s' [%d][%d][%d]\n",
         cmd, WEXITSTATUS(status1), WEXITSTATUS(status2), WEXITSTATUS(status3));
 }
@@ -324,6 +324,9 @@ int pipeline_search(char* cmd, struct node* head_pipe) { // try to make each com
                         print_arr(args3, num_args3);*/
                         printf("double piping\n");
                         double_pipeline(args1, args2, args3, cmd);
+                }
+                else if (num_pipes == 3) {
+                        
                 }
                 else {
                         fprintf(stderr, "too many pipes");
