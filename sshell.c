@@ -68,6 +68,13 @@ void print_arr(char* args[], int size) {
         }
         printf("\n");
 }
+void print_status_arr(int status_arr[], int size) {
+        //printf("array of args: ");
+        for (int i = 0; i<size; i++) {
+                printf("[%d]", status_arr[i]);
+        }
+        printf("\n");
+}
 char* trimwhitespace(char *str)
 {
   char *end;
@@ -111,7 +118,7 @@ void cmd_cd(char* cmd, int num_args, char* args[]) {
                         cmd, status);
 }
 int forking(char* args[], int read_fd, int write_fd) {
-        //printf(" made it to fork\n");
+        //printf("made it to fork\n");
         int status;
         pid_t pid;
         //printf("read %d, write %d\n", read_fd, write_fd);
@@ -206,8 +213,9 @@ char** ll_to_arr(struct node* head, int num_args) {
         return args;
 }
 void redirection(char* cmd, char* file_name) {
+        //printf("%s %s\n",cmd, file_name);
         int num_args;
-        struct node* head_arg;
+        struct node* head_arg = NULL;
         // means we found a ">" character
         //printf("found a '>' at %s\n", file_name);
         int length_redir = file_name - cmd; // find index of ">"
@@ -216,6 +224,7 @@ void redirection(char* cmd, char* file_name) {
         redir_cmd[length_redir] = '\0'; //end string with null character
         file_name = trimwhitespace(file_name+1);
         //printf("redir_cmd: %s, file_name: %s\n", redir_cmd, file_name);
+        printf("filename: %s\n", file_name );
         int fd;
         fd = open(file_name, O_CREAT | O_RDWR | O_TRUNC, 0644);
         //printf("create fd\n");
@@ -229,7 +238,9 @@ void redirection(char* cmd, char* file_name) {
         //print_arr(args, num_args);
         //exit(0);
         //printf("forking now:\n");
-        forking(args, 0,fd); 
+        int status = forking(args, 0,fd);
+        fprintf(stdout, "+ completed '%s' [%d]\n",
+                cmd, status);
         close(fd);
         //dup2(STDERR_FILENO,STDOUT_FILENO);
 }
@@ -244,55 +255,6 @@ int find_redirection(char* cmd) {
         }
         return 0;
 }
-int pipeline_search(char* cmd, struct node* head_pipe) { // try to make each command in pipeline a linked list of args?
-        int num_pipes = linked_list(cmd,&head_pipe,"|") - 1;
-        if (!num_pipes) {
-                return 0;
-        }
-        else { // find way to create linked list of args per node of linked list of pipeline
-                if (num_pipes == 1) {
-                        struct node* head_args1 = NULL;
-                        struct node* head_args2 = NULL;
-                        int num_args1 = linked_list(head_pipe->val, &head_args1, " ");
-                        int num_args2 = linked_list(head_pipe->next->val, &head_args2, " ");
-                        char** args1 = ll_to_arr(head_args1, num_args1);
-                        char** args2 = ll_to_arr(head_args2, num_args2);
-                        //print_arr();
-                        //printf("single piping");
-                        pipeline(args1, args2, cmd);
-                }
-                else if (num_pipes == 2) {
-                        struct node* head_args1 = NULL;
-                        struct node* head_args2 = NULL;
-                        struct node* head_args3 = NULL;
-                        /*printf("1). %s\n", head_pipe->val);
-                        printf("2). %s\n", head_pipe->next->val);
-                        printf("3). %s\n", head_pipe->next->next->val);*/
-                        int num_args1 = linked_list(head_pipe->val, &head_args1, " ");
-                        int num_args2 = linked_list(head_pipe->next->val, &head_args2, " ");
-                        int num_args3 = linked_list(head_pipe->next->next->val, &head_args3, " ");
-                        char** args1 = ll_to_arr(head_args1, num_args1);
-                        char** args2 = ll_to_arr(head_args2, num_args2);
-                        char** args3 = ll_to_arr(head_args3, num_args3);
-                        /*printf("1. ");
-                        print_arr(args1, num_args1);
-                        printf("2. ");
-                        print_arr(args2, num_args2);
-                        printf("3. ");
-                        print_arr(args3, num_args3);*/
-                        printf("double piping\n");
-                        double_pipeline(args1, args2, args3, cmd);
-                }
-                else if (num_pipes == 3) {
-
-                }
-                else {
-                        fprintf(stderr, "too many pipes");
-                        exit(0);
-                }
-        }
-        return 1;
-}
 int pipeline_general(char* cmd) {
         struct node* head_pipe;
         int num_commands = linked_list(cmd,&head_pipe,"|"); // find number of commands
@@ -300,9 +262,9 @@ int pipeline_general(char* cmd) {
         int fd[2];
         int input_fd = 0; // for first child process, stdin is the default, we are not reading from other pipes
         int num_args;
-        int status;
+        int status_arr[num_commands];
         if (num_commands == 1) { // treat as regular command, can exit
-                return 1;
+                return 0;
         }
         for (i = 0; i < num_commands; i++) {
                 struct node* head_arg = NULL;
@@ -314,12 +276,12 @@ int pipeline_general(char* cmd) {
                         head_pipe = head_pipe->next;
                 }
                 if (i == num_commands - 1) {
-                        status = forking(args, input_fd, 1);
+                        status_arr[i] = forking(args, input_fd, 1);
                 }
                 else {
-                        status = forking(args, input_fd, fd[1]);
+                        status_arr[i] = forking(args, input_fd, fd[1]);
                 }
-                printf("status: %d\n", status);
+                //printf("status: %d\n", status);
                 close(fd[1]);
                 input_fd = fd[0];
                 freeList(head_arg);
@@ -328,13 +290,17 @@ int pipeline_general(char* cmd) {
                 }
                 free(args);
         }
-        return 0;
+        fprintf(stdout, "+ completed '%s' ",
+                cmd);
+        print_status_arr(status_arr, num_commands);
+        return 1;
 }
 int main(void) {
         char cmd[CMDLINE_MAX];
 
         while (1) {
                 char *nl;
+                char* env_vars[26];
                 //int retval;
 
                 /* Print prompt */
@@ -363,14 +329,18 @@ int main(void) {
 
                 /* Piped commands */
                 if (pipeline_general(cmd)) {
-
+                        //printf("we piped\n");
+                        continue;
                 }
+                //printf("out of pipe\n");
 
                 /* Redirected commands*/
-                else if (find_redirection(cmd)) {
-
+                if (find_redirection(cmd)) {
+                        //printf("did a redirection\n");
+                        continue;
                 }
                 else {/* Regular, single command */
+                        //printf("regular cmd\n");
                         int num_args;
                         struct node* head_arg = NULL;
                         num_args = linked_list(cmd, &head_arg, " ");
@@ -379,13 +349,20 @@ int main(void) {
                                 cmd_cd(cmd,num_args,args);
                         } 
                         else if (strcmp(args[0], "pwd") == 0) {
-                                char pwd_name[1024];
+                                char pwd_name[CMDLINE_MAX];
                                 getcwd(pwd_name, sizeof(pwd_name));
                                 printf("%s\n",pwd_name);
+                                fprintf(stdout, "+ completed '%s' [0]\n",
+                                        cmd);
+                        }
+                        else if (strcmp(args[0], "set") == 0) {
+
                         }
                         else {
                                 //printf("args[0]: %s", args[0]);
-                                forking(args,0,1);
+                                int status = forking(args,0,1);
+                                fprintf(stdout, "+ completed '%s' [%d]\n",
+                                        cmd, status);
                         }
                         freeList(head_arg);
                         for (int i = 0; i < num_args; i++) {
