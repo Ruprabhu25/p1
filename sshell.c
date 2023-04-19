@@ -6,15 +6,11 @@
 #include <ctype.h>
 
 #define CMDLINE_MAX 512
+
+char* env_vars[26];
 struct node {
 	char* val;
 	struct node* next;
-};
-struct proc {
-        //char* cmd;
-        char** args;
-        pid_t pid;
-        int retval;
 };
 void freeList(struct node* head)
 {
@@ -116,6 +112,25 @@ void cmd_cd(char* cmd, int num_args, char* args[]) {
         }
         fprintf(stdout, "+ completed '%s' [%d]\n",
                         cmd, status);
+}
+void cmd_set(char* cmd, int num_args, char* args[]) {
+        int index = args[1] - 97;
+        if (num_args == 1 || strlen(args[1]) > 1 || index < 0 || index > 25) {
+                fprintf(stderr, "Error: invalid variable name\n");
+                return;
+        }
+        else {
+                if (num_args == 2) { // set var to ""
+                        free(env_vars[index]);
+                        env_vars[index] = malloc (sizeof(char));
+                        env_vars[index] = "";
+                }
+                else {
+                        free(env_vars[index]);
+                        env_vars[index] = malloc (sizeof(args[2]));
+                        env_vars[index] = args[2];
+                }
+        }
 }
 int forking(char* args[], int read_fd, int write_fd) {
         //printf("made it to fork\n");
@@ -297,10 +312,12 @@ int pipeline_general(char* cmd) {
 }
 int main(void) {
         char cmd[CMDLINE_MAX];
-
+        int i;
+        for (i = 0; i < 26; i++) {
+                env_vars[i] = "";
+        }
         while (1) {
                 char *nl;
-                char* env_vars[26];
                 //int retval;
 
                 /* Print prompt */
@@ -356,7 +373,7 @@ int main(void) {
                                         cmd);
                         }
                         else if (strcmp(args[0], "set") == 0) {
-
+                                cmd_set(cmd,num_args,args);
                         }
                         else {
                                 //printf("args[0]: %s", args[0]);
