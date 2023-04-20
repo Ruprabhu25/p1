@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <sys/wait.h>
 
 #define CMDLINE_MAX 512
 
