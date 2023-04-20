@@ -97,7 +97,7 @@ void cmd_cd(char* cmd, int num_args, char* args[]) {
         else {
                 status = 0;
         }
-        fprintf(stdout, "+ completed '%s' [%d]\n",
+        fprintf(stderr, "+ completed '%s' [%d]\n",
                         cmd, status);
 }
 void cmd_set(char* cmd, int num_args, char* args[]) { // maybe could include in piping
@@ -125,7 +125,7 @@ void cmd_set(char* cmd, int num_args, char* args[]) { // maybe could include in 
                         env_vars[index] = args[2];
                 }
         }
-        fprintf(stdout, "+ completed '%s' [%d]\n", cmd, status);
+        fprintf(stderr, "+ completed '%s' [%d]\n", cmd, status);
 }
 int forking(char* args[], int read_fd, int write_fd, int err_fd) {
         //printf("made it to fork\n");
@@ -303,7 +303,7 @@ void redirection(char* cmd, char* file_name) {
         else {
                 status = forking(args, 0,fd,2);
         }
-        fprintf(stdout, "+ completed '%s' [%d]\n",
+        fprintf(stderr, "+ completed '%s' [%d]\n",
                 cmd, status);
         close(fd);
         //dup2(STDERR_FILENO,STDOUT_FILENO);
@@ -384,7 +384,7 @@ int pipeline_general(char* cmd) {
                 }
                 free(args);
         }
-        fprintf(stdout, "+ completed '%s' ",
+        fprintf(stderr, "+ completed '%s' ",
                 cmd);
         print_status_arr(status_arr, num_commands);
         return 1;
@@ -452,7 +452,7 @@ int main(void) {
                                         char pwd_name[CMDLINE_MAX];
                                         getcwd(pwd_name, sizeof(pwd_name));
                                         printf("%s\n",pwd_name);
-                                        fprintf(stdout, "+ completed '%s' [0]\n",
+                                        fprintf(stderr, "+ completed '%s' [0]\n",
                                                 cmd);
                                 }
                                 else if (strcmp(args[0], "set") == 0) {
@@ -461,7 +461,7 @@ int main(void) {
                                 else {
                                         //printf("args[0]: %s", args[0]);
                                         int status = forking(args,0,1,2);
-                                        fprintf(stdout, "+ completed '%s' [%d]\n",
+                                        fprintf(stderr, "+ completed '%s' [%d]\n",
                                                 cmd, status);
                                 }
                                 for (int i = 0; i < num_args; i++) {
