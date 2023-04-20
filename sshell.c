@@ -347,7 +347,6 @@ int pipeline_general(char* cmd) {
         struct node* head_pipe;
         int num_commands = linked_list(cmd,&head_pipe,"|"); // find number of commands
         int* err_fd;
-        printf("heeres\n");
         pipeline_helper(&(head_pipe->next),&err_fd,num_commands);
         //print_arr(err_fd, num_commands);
         //exit(0);
