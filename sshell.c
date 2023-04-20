@@ -131,7 +131,7 @@ int forking(char* args[], int read_fd, int write_fd, int err_fd) {
         //printf("made it to fork\n");
         int status;
         pid_t pid;
-        printf("read %d, write %d err %d\n", read_fd, write_fd, err_fd);
+        //printf("read %d, write %d err %d\n", read_fd, write_fd, err_fd);
         if (!(pid = fork())) {
                 //printf("child process %d\n", getpid());
 
@@ -351,7 +351,7 @@ int pipeline_general(char* cmd) {
         //print_arr(err_fd, num_commands);
         //exit(0);
         //could parse each to see if pipe contains &
-        printList(head_pipe);
+        //printList(head_pipe);
         int i;
         int fd[2];
         int input_fd = 0; // for first child process, stdin is the default, we are not reading from other pipes
