@@ -387,6 +387,8 @@ int main(void) {
                 /* Builtin command */
                 if (!strcmp(cmd, "exit")) {
                         fprintf(stderr, "Bye...\n");
+                        fprintf(stdout, "+ completed '%s' [%d]\n",
+                                                cmd, 0);
                         break;
                 }
                 /* Piped commands */
