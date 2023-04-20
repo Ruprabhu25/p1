@@ -58,10 +58,10 @@ void add_node(char* str_value, struct node **head, struct node **current) {
 		*current = (*current)->next;
 	}
 }
-void print_arr(char* args[], int size) {
+void print_arr(int args[], int size) {
         //printf("array of args: ");
         for (int i = 0; i<size; i++) {
-                printf("%s ", args[i]);
+                printf("%d ", args[i]);
         }
         printf("\n");
 }
@@ -72,26 +72,12 @@ void print_status_arr(int status_arr[], int size) {
         }
         printf("\n");
 }
-char* trimwhitespace(char *str)
-{
-  char *end;
+char* trimwhitespace(char *str) {
 
-  // Trim leading space
-  while(isspace((unsigned char)*str)) str++;
+        // Trim leading space
+        while(isspace((unsigned char)*str)) str++;
 
-  if(*str == 0)  // All spaces?
-    return str;
-
-  // Trim trailing space
-  end = str + strlen(str) - 1;
-  while(end > str && isspace((unsigned char)*end)) {
-        end--;
-  } 
-
-  // Write new null terminator character
-  end[1] = '\0';
-
-  return str;
+        return str;
 }
 void cmd_cd(char* cmd, int num_args, char* args[]) {
         int cd_status = 0;
@@ -333,9 +319,40 @@ int find_redirection(char* cmd) {
         }
         return 0;
 }
+void pipeline_helper(struct node** head_pipe, int** err_fd, int length) {
+        // find if output is redirected, if so return true and adjust cmd
+        *err_fd = malloc(length * sizeof(int));
+        int count = 1;
+        //printf("test1\n");
+        while (*head_pipe != NULL) {
+                printf("%s\n", (*head_pipe)->val);
+                //printf("test2\n");
+                //printf("%c\n", ((*head_pipe)->val)[0]);
+                if (((*head_pipe)->val)[0] == '&') {
+                        //printf("found & at %d\n", count);
+                        (*head_pipe)->val = trimwhitespace((*head_pipe)->val + 1);
+                        (*err_fd)[count-1] = 1;
+                }
+                else {
+                        //printf("not found & at %d\n", count);
+                        (*err_fd)[count-1] = 0;
+                }
+                //printf("test3\n");
+                head_pipe = &((*head_pipe)->next);
+                count++;
+        }
+
+}
 int pipeline_general(char* cmd) {
         struct node* head_pipe;
         int num_commands = linked_list(cmd,&head_pipe,"|"); // find number of commands
+        int* err_fd;
+        printf("heeres\n");
+        pipeline_helper(&(head_pipe->next),&err_fd,num_commands);
+        //print_arr(err_fd, num_commands);
+        //exit(0);
+        //could parse each to see if pipe contains &
+        printList(head_pipe);
         int i;
         int fd[2];
         int input_fd = 0; // for first child process, stdin is the default, we are not reading from other pipes
