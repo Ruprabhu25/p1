@@ -105,7 +105,7 @@ void cmd_cd(char* cmd, int num_args, char* args[]) {
         }
         //printf("cd status: %d\n", cd_status);
         if (cd_status != 0) {
-                printf("Error: cannot cd into directory\n");
+                fprintf(stderr, "Error: cannot cd into directory\n");
                 status = 1;
         }
         else {
@@ -130,12 +130,12 @@ void cmd_set(char* cmd, int num_args, char* args[]) { // maybe could include in 
         else {
                 if (num_args == 2) { // set var to ""
                         //free(env_vars[index]);
-                        //env_vars[index] = malloc(sizeof(char));
+                        env_vars[index] = malloc(sizeof(char));
                         env_vars[index] = "";
                 }
                 else {
                         //free(env_vars[index]);
-                        //env_vars[index] = malloc(sizeof(args[2]));
+                        env_vars[index] = malloc(sizeof(args[2]));
                         env_vars[index] = args[2];
                 }
         }
@@ -284,7 +284,7 @@ void redirection(char* cmd, char* file_name) {
         redir_cmd[length_redir] = '\0'; //end string with null character
         file_name = trimwhitespace(file_name+1);
         //printf("redir_cmd: %s, file_name: %s\n", redir_cmd, file_name);
-        printf("filename: %s\n", file_name );
+        //printf("filename: %s\n", file_name );
         int fd;
         fd = open(file_name, O_CREAT | O_RDWR | O_TRUNC, 0644);
         //printf("create fd\n");
@@ -387,7 +387,7 @@ int main(void) {
                 /* Builtin command */
                 if (!strcmp(cmd, "exit")) {
                         fprintf(stderr, "Bye...\n");
-                        fprintf(stdout, "+ completed '%s' [%d]\n",
+                        fprintf(stderr, "+ completed '%s' [%d]\n",
                                                 cmd, 0);
                         break;
                 }

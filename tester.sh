@@ -188,6 +188,7 @@ cd_pwd() {
 
     local line_array=()
     line_array+=("$(select_line "${STDOUT}" "4")")
+    echo 
     line_array+=("$(select_line "${STDERR}" "2")")
     local corr_array=()
     corr_array+=("${PWD}/dir_test")
