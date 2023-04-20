@@ -46,13 +46,13 @@ void add_node(char* str_value, struct node **head, struct node **current) {
 	//if head is NULL, the list is empty
 	if(*head == NULL) {
 		*head = newNode;
-                printf("head called\n");
+                //printf("head called\n");
 		*current = *head;
 	}
 	//else, find the last node and add newNode
 	else {
 		//add the newNode at the end of the linked list
-                printf("add to end\n");
+                //printf("add to end\n");
 		(*current)->next = newNode;
 		*current = (*current)->next;
 	}
@@ -113,24 +113,32 @@ void cmd_cd(char* cmd, int num_args, char* args[]) {
         fprintf(stdout, "+ completed '%s' [%d]\n",
                         cmd, status);
 }
-void cmd_set(char* cmd, int num_args, char* args[]) {
-        int index = args[1] - 97;
-        if (num_args == 1 || strlen(args[1]) > 1 || index < 0 || index > 25) {
+void cmd_set(char* cmd, int num_args, char* args[]) { // maybe could include in piping
+        if (strlen(args[1]) != 1) {
                 fprintf(stderr, "Error: invalid variable name\n");
+                return;
+        }
+        int index = args[1][0] - 97;
+        //printf("index %c %d\n", index, index);
+        int status = 0;
+        if (num_args == 1 || index < 0 || index > 25) {
+                fprintf(stderr, "Error: invalid variable name\n");
+                status = 1;
                 return;
         }
         else {
                 if (num_args == 2) { // set var to ""
-                        free(env_vars[index]);
-                        env_vars[index] = malloc (sizeof(char));
+                        //free(env_vars[index]);
+                        //env_vars[index] = malloc(sizeof(char));
                         env_vars[index] = "";
                 }
                 else {
-                        free(env_vars[index]);
-                        env_vars[index] = malloc (sizeof(args[2]));
+                        //free(env_vars[index]);
+                        //env_vars[index] = malloc(sizeof(args[2]));
                         env_vars[index] = args[2];
                 }
         }
+        fprintf(stdout, "+ completed '%s' [%d]\n", cmd, status);
 }
 int forking(char* args[], int read_fd, int write_fd) {
         //printf("made it to fork\n");
@@ -169,12 +177,45 @@ int linked_list(char* cmd, struct node** head, char* delimiter) {
         strcpy(cmd_copy,cmd);
         //printf("total before: %s\n", cmd_copy);
         char* token_args = strtok(cmd_copy, delimiter);
+        //printf("%d\n", strcmp(token_args, cmd));
+        //token_args = strtok(NULL, delimiter); 
+
         // loop through the string to extract all other tokens
         while( token_args != NULL ) {
+                //printf("start of loop\n");
+                // env might not be updating correctly, might have to use pointer to env
                 // create new node with value of pattern
                 struct node *newNode = (struct node*) malloc(sizeof(struct node));
-                newNode->val = malloc(strlen(token_args) + 1);
-                strcpy(newNode->val,token_args);
+                //check if token is an environment variable
+                int len = strlen(token_args);
+                //printf("token: %s\n", token_args);
+                if (token_args[0] == '$') {
+                        if (len != 2 && num_args == 0) {
+                                //printf("%s %d\n",token_args, len);
+                                fprintf(stderr, "Error: invalid variable name\n");
+                        }
+                        else if (strcmp(token_args, cmd) != 0) {
+                                //printf("made it %c %d\n", token_args[1], token_args[1]);
+                                int index = token_args[1] - 97;
+                                if (index >= 0 && index <= 25) {
+                                        //printf("arg %s, %c is %s\n", token_args, token_args[1], env_vars[index]);
+                                        newNode->val = malloc(strlen(env_vars[index]));
+                                        strcpy(newNode->val,env_vars[index]);
+                                }
+                                else {
+                                        fprintf(stderr, "Error: invalid variable name\n");
+                                        return -1;  
+                                }
+                        }
+                        else {
+                                fprintf(stderr, "Error: invalid variable name\n");
+                                return -1;
+                        }
+                }
+                else {
+                        newNode->val = malloc(len + 1);
+                        strcpy(newNode->val,token_args);
+                }
                 newNode->next = NULL;
                 //printf("node insertion: %s\n", newNode->val);
 
@@ -200,8 +241,10 @@ int linked_list(char* cmd, struct node** head, char* delimiter) {
                         lastNode->next = newNode;
                 }
                 (num_args)++;
-                token_args = strtok(NULL, delimiter); 
+                token_args = strtok(NULL, delimiter);
+                //printf("made it to end of loop\n"); 
         }              
+        //printf("exited loop\n");
         //printf("list:\n");
         //printList(*head);
         return num_args;
@@ -214,6 +257,7 @@ char** ll_to_arr(struct node* head, int num_args) {
         while (temp != NULL) {
                 //printf("%d %s\n", arg_pos, head_arg->val);
                 //printf("temp: %s args: %s\n", temp->val, args[arg_pos]);
+
                 args[arg_pos] = malloc(strlen(temp->val)+1);
                 strcpy(args[arg_pos],temp->val); //CHECK OUT
                 //printf("temp: %s\n", temp->val);
@@ -314,6 +358,7 @@ int main(void) {
         char cmd[CMDLINE_MAX];
         int i;
         for (i = 0; i < 26; i++) {
+                //env_vars[i] = malloc(sizeof(char));
                 env_vars[i] = "";
         }
         while (1) {
@@ -343,7 +388,6 @@ int main(void) {
                         fprintf(stderr, "Bye...\n");
                         break;
                 }
-
                 /* Piped commands */
                 if (pipeline_general(cmd)) {
                         //printf("we piped\n");
@@ -352,7 +396,7 @@ int main(void) {
                 //printf("out of pipe\n");
 
                 /* Redirected commands*/
-                if (find_redirection(cmd)) {
+                else if (find_redirection(cmd)) {
                         //printf("did a redirection\n");
                         continue;
                 }
@@ -361,31 +405,34 @@ int main(void) {
                         int num_args;
                         struct node* head_arg = NULL;
                         num_args = linked_list(cmd, &head_arg, " ");
-                        char** args = ll_to_arr(head_arg, num_args);
-                        if (strcmp(args[0], "cd") == 0) {
-                                cmd_cd(cmd,num_args,args);
-                        } 
-                        else if (strcmp(args[0], "pwd") == 0) {
-                                char pwd_name[CMDLINE_MAX];
-                                getcwd(pwd_name, sizeof(pwd_name));
-                                printf("%s\n",pwd_name);
-                                fprintf(stdout, "+ completed '%s' [0]\n",
-                                        cmd);
-                        }
-                        else if (strcmp(args[0], "set") == 0) {
-                                cmd_set(cmd,num_args,args);
-                        }
-                        else {
-                                //printf("args[0]: %s", args[0]);
-                                int status = forking(args,0,1);
-                                fprintf(stdout, "+ completed '%s' [%d]\n",
-                                        cmd, status);
+                        //printf("num args: %d\n", num_args);
+                        if (num_args > 0) {
+                                char** args = ll_to_arr(head_arg, num_args);
+                                if (strcmp(args[0], "cd") == 0) {
+                                        cmd_cd(cmd,num_args,args);
+                                } 
+                                else if (strcmp(args[0], "pwd") == 0) {
+                                        char pwd_name[CMDLINE_MAX];
+                                        getcwd(pwd_name, sizeof(pwd_name));
+                                        printf("%s\n",pwd_name);
+                                        fprintf(stdout, "+ completed '%s' [0]\n",
+                                                cmd);
+                                }
+                                else if (strcmp(args[0], "set") == 0) {
+                                        cmd_set(cmd,num_args,args);
+                                }
+                                else {
+                                        //printf("args[0]: %s", args[0]);
+                                        int status = forking(args,0,1);
+                                        fprintf(stdout, "+ completed '%s' [%d]\n",
+                                                cmd, status);
+                                }
+                                for (int i = 0; i < num_args; i++) {
+                                        free(args[i]);
+                                }
+                                free(args);
                         }
                         freeList(head_arg);
-                        for (int i = 0; i < num_args; i++) {
-                                free(args[i]);
-                        }
-                        free(args);
                 }
         }
         return EXIT_SUCCESS;
