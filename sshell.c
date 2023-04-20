@@ -141,11 +141,11 @@ void cmd_set(char* cmd, int num_args, char* args[]) { // maybe could include in 
         }
         fprintf(stdout, "+ completed '%s' [%d]\n", cmd, status);
 }
-int forking(char* args[], int read_fd, int write_fd) {
+int forking(char* args[], int read_fd, int write_fd, int err_fd) {
         //printf("made it to fork\n");
         int status;
         pid_t pid;
-        //printf("read %d, write %d\n", read_fd, write_fd);
+        printf("read %d, write %d err %d\n", read_fd, write_fd, err_fd);
         if (!(pid = fork())) {
                 //printf("child process %d\n", getpid());
 
@@ -155,12 +155,17 @@ int forking(char* args[], int read_fd, int write_fd) {
                         close(read_fd); // not needed anymore
                 }
                 if (write_fd != 1) {
+                        if (err_fd != 2) {
+                                dup2(err_fd, STDERR_FILENO);
+                        }
                         //printf("closed write: %d\n", write_fd);
                         dup2(write_fd, STDOUT_FILENO);
                         close(write_fd); // not needed anymore
                 }
+                if (err_fd != 2) {
+                        dup2(err_fd, STDERR_FILENO);
+                }
                 execvp(args[0], args);
-                perror("execvp");
                 fprintf(stderr, "Error: command not found\n");
                 exit(1);
         } else {
@@ -275,6 +280,7 @@ char** ll_to_arr(struct node* head, int num_args) {
 void redirection(char* cmd, char* file_name) {
         //printf("%s %s\n",cmd, file_name);
         int num_args;
+        int redir_err = 0;
         struct node* head_arg = NULL;
         // means we found a ">" character
         //printf("found a '>' at %s\n", file_name);
@@ -282,7 +288,13 @@ void redirection(char* cmd, char* file_name) {
         char redir_cmd[length_redir];
         memcpy(redir_cmd, cmd, length_redir); // copy substring before ">" to redir_cmd
         redir_cmd[length_redir] = '\0'; //end string with null character
-        file_name = trimwhitespace(file_name+1);
+        if ((file_name + 1)[0] == '&') {
+                redir_err = 1;
+                file_name = trimwhitespace(file_name+2);
+        }
+        else {
+                file_name = trimwhitespace(file_name+1);
+        }
         //printf("redir_cmd: %s, file_name: %s\n", redir_cmd, file_name);
         //printf("filename: %s\n", file_name );
         int fd;
@@ -298,7 +310,13 @@ void redirection(char* cmd, char* file_name) {
         //print_arr(args, num_args);
         //exit(0);
         //printf("forking now:\n");
-        int status = forking(args, 0,fd);
+        int status;
+        if (redir_err == 1) {
+                status = forking(args, 0,fd,fd);
+        }
+        else {
+                status = forking(args, 0,fd,2);
+        }
         fprintf(stdout, "+ completed '%s' [%d]\n",
                 cmd, status);
         close(fd);
@@ -336,10 +354,10 @@ int pipeline_general(char* cmd) {
                         head_pipe = head_pipe->next;
                 }
                 if (i == num_commands - 1) {
-                        status_arr[i] = forking(args, input_fd, 1);
+                        status_arr[i] = forking(args, input_fd,1,2);
                 }
                 else {
-                        status_arr[i] = forking(args, input_fd, fd[1]);
+                        status_arr[i] = forking(args, input_fd, fd[1],2);
                 }
                 //printf("status: %d\n", status);
                 close(fd[1]);
@@ -426,7 +444,7 @@ int main(void) {
                                 }
                                 else {
                                         //printf("args[0]: %s", args[0]);
-                                        int status = forking(args,0,1);
+                                        int status = forking(args,0,1,2);
                                         fprintf(stdout, "+ completed '%s' [%d]\n",
                                                 cmd, status);
                                 }
