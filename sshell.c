@@ -7,8 +7,9 @@
 #include <sys/wait.h>
 
 #define CMDLINE_MAX 512
+#define NUM_ENV_VARS 26
 
-char* env_vars[26];
+char* env_vars[NUM_ENV_VARS];
 struct node {
 	char* val;
 	struct node* next;
@@ -325,7 +326,7 @@ void pipeline_helper(struct node** head_pipe, int** err_fd, int length) {
         int count = 1;
         //printf("test1\n");
         while (*head_pipe != NULL) {
-                printf("%s\n", (*head_pipe)->val);
+                //printf("%s\n", (*head_pipe)->val);
                 //printf("test2\n");
                 //printf("%c\n", ((*head_pipe)->val)[0]);
                 if (((*head_pipe)->val)[0] == '&') {
@@ -346,8 +347,8 @@ void pipeline_helper(struct node** head_pipe, int** err_fd, int length) {
 int pipeline_general(char* cmd) {
         struct node* head_pipe;
         int num_commands = linked_list(cmd,&head_pipe,"|"); // find number of commands
-        int* err_fd;
-        pipeline_helper(&(head_pipe->next),&err_fd,num_commands);
+        int* err_fd_arr;
+        pipeline_helper(&(head_pipe->next),&err_fd_arr,num_commands);
         //print_arr(err_fd, num_commands);
         //exit(0);
         //could parse each to see if pipe contains &
@@ -361,6 +362,7 @@ int pipeline_general(char* cmd) {
                 return 0;
         }
         for (i = 0; i < num_commands; i++) {
+                int std_err_fd = 2; // default
                 struct node* head_arg = NULL;
                 char** args;
                 pipe(fd);
@@ -369,11 +371,14 @@ int pipeline_general(char* cmd) {
                         args = ll_to_arr(head_arg,num_args);
                         head_pipe = head_pipe->next;
                 }
+                if (err_fd_arr[i] == 1) {
+                        std_err_fd = fd[1];
+                }
                 if (i == num_commands - 1) {
-                        status_arr[i] = forking(args, input_fd,1,2);
+                        status_arr[i] = forking(args, input_fd,1,std_err_fd);
                 }
                 else {
-                        status_arr[i] = forking(args, input_fd, fd[1],2);
+                        status_arr[i] = forking(args, input_fd, fd[1],std_err_fd);
                 }
                 //printf("status: %d\n", status);
                 close(fd[1]);
@@ -393,7 +398,7 @@ int main(void) {
         char cmd[CMDLINE_MAX];
         int i;
         for (i = 0; i < 26; i++) {
-                //env_vars[i] = malloc(sizeof(char));
+                env_vars[i] = malloc(CMDLINE_MAX*sizeof(char));
                 env_vars[i] = "";
         }
         while (1) {
