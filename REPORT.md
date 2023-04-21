@@ -1,0 +1,47 @@
+# SSHELL: Simple Shell
+
+## Summary
+This program, `sshell.c`, is a simple shell that accepts inputs from user in the form of command lines and executes them.
+
+## Implementation
+The implementation of this program is followed by 7 distinct phases starting from phase 0.
+
+### Phase 0
+This phase is rather straight forward, as a skeleton shell is already given. However, the `system()` function that was used is not viable for creating a realistic shell since it does not support output redirection or piping which will be implemented later on.
+
+A `Makefile` is written to generate an executable sshell from the sshell.c file, including the flags `-Wall -Wextra -Werror` and removing any generated files and puts the directory back to its original state. 
+
+### Phase 1
+In getting rid of the `system()` function, the program is modified so that it uses the *fork + exec + wait* method. A `forking()` function is then created to incorporate this method. The function takes in 3 parameters `(char* args[], int read_fd, int write_fd)`. During the child process, [why dup2??] otherwise, `execvp()` is called to retrieve command from `$PATH`. In the case that `execvp()` fails, an error message will be printed and the program will exit. During the parent process, since the parent can only run its process after the child, it is forced to wait until the child have return an exit status of 0 before processing.
+
+To test this function, we simply used the command []
+
+### Phase 2
+In order to parse the command lines and still maintain a proper data structure for a later phase, we decided to use `linked lists`. The pros of using this data structure include efficiency because command lines only needed to be parsed once in addition to its `FIFO` attrtibute that will later be useful in piping.
+
+To implement this, a `linked_list()` function is created. The way it works is that it parses through a command line and look for commands and arguments separated by white spaces and assign them to a node on the linked list respectively.
+
+This function was easily tested by writing a random command and arguments onto the command line and once it returns each of the token separated individually then it has proven to parse successfully.
+
+An addition to the `linked_list()` function, a `ll_to_arr()` function was also created to count the number of `command + arguments` that were in the command line. The function was implemented so that it count the number of nodes starting from the head node which was the command. Once it reaches the end of the linked list, it will then return the number of nodes in the linked_list.
+
+### Phase 3
+The `cd` command was implemented by using the `chdir()` function to change the directory on the terminal. The `cmd_cd()` function that was used to implement the `cd` command takes in 3 parameters `(char* cmd, int num_args, char* args[])`. When `num_args = 1`, meaning there is only 1 argument and the user is trying to go back to the home directory, `chdir("/")` will return a status number of 0 which means the process was successful. When `num_args > 1`, the same process occur except `chdir()` will change the directory to `args[1]` of the command line which is an argument followed by the `cd` command. A status of 0 will then return a message showing that the directory is changed successfully. However, a status other than 0 (i.e status = 1) will output an error message.
+
+The `pwd` command was easily implemented with just the `getcwd()` function and printing the result to the terminal together with the *Process Completion Status*.
+
+### Phase 4
+There are 2 functions created and implemented mainly for output redirection, `redirection(char* cmd, char* file_name)` and `find_redirection(char* cmd)`. The `redirection()` function was implemented so that it parses through a command line and look for the character `>`. Once it is found, the index of the `>` character will be recorded so that we can separate the substrings before and after `>`. A null character `'\0'` will also be included to end the substring. 
+
+After that, a file descriptor is created to open the file that was extracted from the command line. But before opening the file, we had to make sure that there are not any white spaces surrounding the file name. To solve that, the function `trimwhitespace()` was created to remove any leading and trailing white spaces. Once the file name is free of unnescessary white spaces, it can then be open with the function `open()` with the flags `O_CREAT`, `O_RDWR`, and `O_TRUNC`. [why?] 
+
+The `find_redirection()` function was created to look for a `>` character within the command line using `strchr()`. It should return a 0 if none was found, and call `redirection()` function if a `>` was found and return the value 1. This *extra* function was created so that we don't need to parse through every command line and rather just skip to the next step.
+
+### Phase 5
+piping
+
+### Phase 6
+extra feature
+
+### Memory Management
+`freeList()`
