@@ -102,30 +102,33 @@ void cmd_cd(char* cmd, int num_args, char* args[]) {
                         cmd, status);
 }
 void cmd_set(char* cmd, int num_args, char* args[]) { // maybe could include in piping
-        if (strlen(args[1]) != 1) {
-                fprintf(stderr, "Error: invalid variable name\n");
-                return;
-        }
-        int index = args[1][0] - 97;
-        //printf("index %c %d\n", index, index);
         int status = 0;
-        if (num_args == 1 || index < 0 || index > 25) {
+	if (num_args < 2 && strlen(args[1]) != 1) {
                 fprintf(stderr, "Error: invalid variable name\n");
-                status = 1;
-                return;
-        }
-        else {
-                if (num_args == 2) { // set var to ""
+        	status = 1;
+	}
+	else {
+        	int index = args[1][0] - 97; 
+        	//printf("
+		//printf("index %c %d, set to args[2]: %s\n", args[1][0], index, args[2]);
+        	if (index < 0 || index > 25) {
+                	fprintf(stderr, "Error: invalid variable name\n");
+                	status = 1;
+                	return;
+        	}   
+        	else {
+                	if (num_args == 2) { // set var to ""
+                        	//free(env_vars[index]);
+                        	env_vars[index] = malloc(sizeof(char));
+                        	env_vars[index] = "";
+                	}
+                	else { // have to fix for set with more than 3 args
                         //free(env_vars[index]);
-                        env_vars[index] = malloc(sizeof(char));
-                        env_vars[index] = "";
-                }
-                else {
-                        //free(env_vars[index]);
-                        env_vars[index] = malloc(sizeof(args[2]));
-                        env_vars[index] = args[2];
-                }
-        }
+                        	env_vars[index] = malloc(sizeof(args[2]));
+                        	strcpy(env_vars[index],args[2]);
+                	}
+        	}
+	}
         fprintf(stderr, "+ completed '%s' [%d]\n", cmd, status);
 }
 int forking(char* args[], int read_fd, int write_fd, int err_fd) {
@@ -181,8 +184,8 @@ int linked_list(char* cmd, struct node** head, char* delimiter) {
                 struct node *newNode = (struct node*) malloc(sizeof(struct node));
                 //check if token is an environment variable
                 int len = strlen(token_args);
-                //printf("token: %s\n", token_args);
-                if (token_args[0] == '$') {
+               // printf("token: %s, length: %d\n", token_args,len);
+                if (token_args[0] == '$' && strcmp("|", delimiter) != 0) {
                         if (len != 2 && num_args == 0) {
                                 //printf("%s %d\n",token_args, len);
                                 fprintf(stderr, "Error: invalid variable name\n");
@@ -191,7 +194,7 @@ int linked_list(char* cmd, struct node** head, char* delimiter) {
                                 //printf("made it %c %d\n", token_args[1], token_args[1]);
                                 int index = token_args[1] - 97;
                                 if (index >= 0 && index <= 25) {
-                                        //printf("arg %s, %c is %s\n", token_args, token_args[1], env_vars[index]);
+                                //        printf("arg %s, %c is %s\n", token_args, token_args[1], env_vars[index]);
                                         newNode->val = malloc(strlen(env_vars[index]));
                                         strcpy(newNode->val,env_vars[index]);
                                 }
@@ -222,6 +225,7 @@ int linked_list(char* cmd, struct node** head, char* delimiter) {
                         //add the newNode at the end of the linked list
                         //printf("add to end\n");
                         struct node *lastNode = *head;
+			
                 
                         //last node's next address will be NULL.
                         while(lastNode->next != NULL) {
@@ -345,10 +349,13 @@ void pipeline_helper(struct node** head_pipe, int** err_fd, int length) {
 
 }
 int pipeline_general(char* cmd) {
-        struct node* head_pipe;
+	if (strchr(cmd,'|') == NULL) {
+		return 0;
+	}
+        struct node* head_pipe = NULL;
         int num_commands = linked_list(cmd,&head_pipe,"|"); // find number of commands
-        int* err_fd_arr;
-        pipeline_helper(&(head_pipe->next),&err_fd_arr,num_commands);
+        //int* err_fd_arr;
+        //pipeline_helper(&(head_pipe->next),&err_fd_arr,num_commands);
         //print_arr(err_fd, num_commands);
         //exit(0);
         //could parse each to see if pipe contains &
@@ -358,8 +365,10 @@ int pipeline_general(char* cmd) {
         int input_fd = 0; // for first child process, stdin is the default, we are not reading from other pipes
         int num_args;
         int status_arr[num_commands];
-        if (num_commands == 1) { // treat as regular command, can exit
-                return 0;
+        // irrelevant bc of line 348, maybe delete
+	if (num_commands == 1) { // treat as regular command, can exit
+                freeList(head_pipe);
+		return 0;
         }
         for (i = 0; i < num_commands; i++) {
                 int std_err_fd = 2; // default
@@ -371,9 +380,9 @@ int pipeline_general(char* cmd) {
                         args = ll_to_arr(head_arg,num_args);
                         head_pipe = head_pipe->next;
                 }
-                if (err_fd_arr[i] == 1) {
+          /*      if (err_fd_arr[i] == 1) {
                         std_err_fd = fd[1];
-                }
+                }*/
                 if (i == num_commands - 1) {
                         status_arr[i] = forking(args, input_fd,1,std_err_fd);
                 }
@@ -430,20 +439,22 @@ int main(void) {
                                                 cmd, 0);
                         break;
                 }
-                /* Piped commands */
+		//printf("before piping\n");
+                //printf("test\n");
+		/* Piped commands */
                 if (pipeline_general(cmd)) {
-                        //printf("we piped\n");
+                //        printf("we piped\n");
                         continue;
                 }
                 //printf("out of pipe\n");
 
                 /* Redirected commands*/
                 else if (find_redirection(cmd)) {
-                        //printf("did a redirection\n");
+                //        printf("did a redirection\n");
                         continue;
                 }
                 else {/* Regular, single command */
-                        //printf("regular cmd\n");
+                     //   printf("regular cmd\n");
                         int num_args;
                         struct node* head_arg = NULL;
                         num_args = linked_list(cmd, &head_arg, " ");
